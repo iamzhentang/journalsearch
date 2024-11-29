@@ -148,7 +148,7 @@
         // 加载CSV数据
         async function loadData() {
             try {
-                const response = await fetch('C:/Users/admin/Nutstore/1/script/github/journalsearch/test.csv');
+                const response = await fetch('test.csv');
                 const csvData = await response.text();
                 
                 Papa.parse(csvData, {
