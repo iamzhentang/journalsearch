@@ -148,7 +148,7 @@
         // 加载CSV数据
         async function loadData() {
             try {
-                const response = await fetch('test.csv');
+                const response = await fetch('C:/Users/admin/Nutstore/1/script/github/journalsearch/test.csv');
                 const csvData = await response.text();
                 
                 Papa.parse(csvData, {
@@ -227,19 +227,49 @@
             updateTotalCount();
         }
 
-        // 更新分页控件
-        function updatePagination() {
+// 更新分页控件
+function updatePagination() {
             const pageCount = Math.ceil(filteredJournals.length / itemsPerPage);
             const pagination = document.getElementById('pagination');
-            
             let buttons = [];
-            for (let i = 1; i <= pageCount; i++) {
+
+            // 添加首页按钮
+            if (currentPage > 1) {
+                buttons.push(`<button onclick="goToPage(1)">首页</button>`);
+            }
+
+            // 添加上一页按钮
+            if (currentPage > 1) {
+                buttons.push(`<button onclick="goToPage(${currentPage - 1})">上一页</button>`);
+            }
+
+            // 计算要显示的页码范围
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(pageCount, startPage + 4);
+            
+            // 调整起始页以确保始终显示5个页码（如果有）
+            if (endPage - startPage < 4) {
+                startPage = Math.max(1, endPage - 4);
+            }
+
+            // 添加页码按钮
+            for (let i = startPage; i <= endPage; i++) {
                 buttons.push(`
                     <button 
                         onclick="goToPage(${i})" 
                         class="${currentPage === i ? 'active' : ''}"
                     >${i}</button>
                 `);
+            }
+
+            // 添加下一页按钮
+            if (currentPage < pageCount) {
+                buttons.push(`<button onclick="goToPage(${currentPage + 1})">下一页</button>`);
+            }
+
+            // 添加末页按钮
+            if (currentPage < pageCount) {
+                buttons.push(`<button onclick="goToPage(${pageCount})">末页</button>`);
             }
             
             pagination.innerHTML = buttons.join('');
