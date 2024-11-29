@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>期刊查询系统</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .search-container {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .search-box {
+            flex: 1;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        select {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        th:hover {
+            background: #e9ecef;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .pagination {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .pagination button {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .pagination button.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .total-count {
+            margin-top: 10px;
+            text-align: right;
+            color: #666;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
+            color: #666;
+        }
+
+        .error {
+            color: #dc3545;
+            padding: 20px;
+            text-align: center;
+            background: #fff;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>期刊查询系统</h1>
+    
+    <div class="search-container">
+        <input type="text" id="searchInput" class="search-box" placeholder="输入关键词搜索...">
+        <select id="searchField">
+            <option value="all">所有字段</option>
+            <option value="期刊名称">期刊名称</option>
+            <option value="ISSN">ISSN</option>
+            <option value="领域">领域</option>
+            <option value="主办单位">主办单位</option>
+        </select>
+    </div>
+
+    <div id="tableContainer">
+        <table>
+            <thead>
+                <tr>
+                    <th onclick="sortTable('期刊名称')">期刊名称</th>
+                    <th onclick="sortTable('ISSN')">ISSN</th>
+                    <th onclick="sortTable('领域')">领域</th>
+                    <th onclick="sortTable('主办单位')">主办单位</th>
+                    <th onclick="sortTable('学院分类')">学院分类</th>
+                </tr>
+            </thead>
+            <tbody id="journalTableBody"></tbody>
+        </table>
+    </div>
+
+    <div class="pagination" id="pagination"></div>
+    <div class="total-count" id="totalCount"></div>
+
+    <script>
+        let journals = [];
+        let filteredJournals = [];
+        let currentPage = 1;
+        const itemsPerPage = 10;
+        let currentSort = { field: null, direction: 'asc' };
+
+        // 加载CSV数据
+        async function loadData() {
+            try {
+                const response = await fetch('test.csv');
+                const csvData = await response.text();
+                
+                Papa.parse(csvData, {
+                    header: true,
+                    complete: function(results) {
+                        journals = results.data;
+                        filteredJournals = [...journals];
+                        updateTable();
+                    },
+                    error: function(error) {
+                        showError('数据解析错误：' + error.message);
+                    }
+                });
+            } catch (error) {
+                showError('数据加载错误：' + error.message);
+            }
+        }
+
+        // 搜索功能
+        function searchJournals(query) {
+            const searchField = document.getElementById('searchField').value;
+            const searchTerm = query.toLowerCase();
+
+            filteredJournals = journals.filter(journal => {
+                if (searchField === 'all') {
+                    return Object.values(journal).some(value => 
+                        String(value).toLowerCase().includes(searchTerm)
+                    );
+                } else {
+                    return String(journal[searchField] || '').toLowerCase().includes(searchTerm);
+                }
+            });
+
+            currentPage = 1;
+            updateTable();
+        }
+
+        // 排序功能
+        function sortTable(field) {
+            if (currentSort.field === field) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort = { field, direction: 'asc' };
+            }
+
+            filteredJournals.sort((a, b) => {
+                let aVal = String(a[field] || '');
+                let bVal = String(b[field] || '');
+                
+                return currentSort.direction === 'asc' 
+                    ? aVal.localeCompare(bVal, 'zh-CN')
+                    : bVal.localeCompare(aVal, 'zh-CN');
+            });
+
+            updateTable();
+        }
+
+        // 更新表格显示
+        function updateTable() {
+            const tbody = document.getElementById('journalTableBody');
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageData = filteredJournals.slice(start, end);
+
+            tbody.innerHTML = pageData.map(journal => `
+                <tr>
+                    <td>${journal['期刊名称'] || '-'}</td>
+                    <td>${journal['ISSN'] || '-'}</td>
+                    <td>${journal['领域'] || '-'}</td>
+                    <td>${journal['主办单位'] || '-'}</td>
+                    <td>${journal['学院分类'] || '-'}</td>
+                </tr>
+            `).join('');
+
+            updatePagination();
+            updateTotalCount();
+        }
+
+        // 更新分页控件
+        function updatePagination() {
+            const pageCount = Math.ceil(filteredJournals.length / itemsPerPage);
+            const pagination = document.getElementById('pagination');
+            
+            let buttons = [];
+            for (let i = 1; i <= pageCount; i++) {
+                buttons.push(`
+                    <button 
+                        onclick="goToPage(${i})" 
+                        class="${currentPage === i ? 'active' : ''}"
+                    >${i}</button>
+                `);
+            }
+            
+            pagination.innerHTML = buttons.join('');
+        }
+
+        // 更新总数显示
+        function updateTotalCount() {
+            document.getElementById('totalCount').textContent = 
+                `共找到 ${filteredJournals.length} 条记录`;
+        }
+
+        // 跳转到指定页
+        function goToPage(page) {
+            currentPage = page;
+            updateTable();
+        }
+
+        // 显示错误信息
+        function showError(message) {
+            const container = document.getElementById('tableContainer');
+            container.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        // 初始化事件监听
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            searchJournals(e.target.value);
+        });
+
+        document.getElementById('searchField').addEventListener('change', () => {
+            searchJournals(document.getElementById('searchInput').value);
+        });
+
+        // 加载数据
+        loadData();
+    </script>
+</body>
+</html>
